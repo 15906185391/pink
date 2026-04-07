@@ -90,13 +90,13 @@ if __name__ == "__main__":
     # Pink tasks
     left_end_effector_task = FrameTask(
         "link_la7",
-        position_cost=1.0,  # [cost] / [m]
-        orientation_cost=1.0,  # [cost] / [rad]
+        position_cost=1.5,  # [cost] / [m]
+        orientation_cost=0.5,  # [cost] / [rad]
     )
     right_end_effector_task = FrameTask(
         "link_ra7",
-        position_cost=1.0,  # [cost] / [m]
-        orientation_cost=1.0,  # [cost] / [rad]
+        position_cost=1.5,  # [cost] / [m]
+        orientation_cost=0.5,  # [cost] / [rad]
     )
 
     # Pink barriers
@@ -104,7 +104,7 @@ if __name__ == "__main__":
         n_collision_pairs=len(robot.collision_model.collisionPairs),
         gain=10.0,
         safe_displacement_gain=5.0,
-        d_min=0.005,
+        d_min=0.02,
     )
 
     posture_task = PostureTask(
@@ -157,11 +157,18 @@ if __name__ == "__main__":
     urdf_vis = ViserUrdf(server, urdf, root_node_name="/pelvis")
 
     # Target gizmo.
-    ik_target = server.scene.add_transform_controls(
-        "/ik_target", scale=0.2, position=(0.61, 0.0, 0.56), wxyz=(0, 0, 1, 0)
+    ik_target_l = server.scene.add_transform_controls(
+        "/ik_target_l", scale=0.2, position=(0.3, 0.1, 0.56), wxyz=(0, 0, 1, 0)
     )
     
-    target_link_name = "link_ra7"
+    
+    ik_target_r = server.scene.add_transform_controls(
+        "/ik_target_r", scale=0.2, position=(0.3, -0.1, 0.56), wxyz=(0, 0, 1, 0)
+    )
+    
+    
+    
+    target_link_name_l = "link_la7"
     
     l_y_des = np.array([0.392, 0.392, 0.6])
     r_y_des = np.array([0.392, 0.392, 0.6])
@@ -199,16 +206,49 @@ if __name__ == "__main__":
         l_dy_des[:] = 0, B * np.cos(t), A * np.cos(t)
         r_dy_des[:] = 0, -B * np.cos(t), A * np.cos(t)
         
-        target_position=np.array(ik_target.position)
-        target_wxyz=np.array(ik_target.wxyz)
+        target_position_l = np.array(ik_target_l.position)
+        target_wxyz_l = np.array(ik_target_l.wxyz)
+        left_end_effector_task.transform_target_to_world.translation = target_position_l
+        # 使用 Pinocchio 的四元数转旋转矩阵
+        quaternion = pin.Quaternion(target_wxyz_l[0], target_wxyz_l[1], target_wxyz_l[2], target_wxyz_l[3])
+        left_end_effector_task.transform_target_to_world.rotation = quaternion.matrix()
+        
+        target_position_r=np.array(ik_target_r.position)
+        target_wxyz_r=np.array(ik_target_r.wxyz)
 
         # left_end_effector_task.transform_target_to_world.translation = l_y_des
-        right_end_effector_task.transform_target_to_world.translation = target_position
+        right_end_effector_task.transform_target_to_world.translation = target_position_r
         # 使用 Pinocchio 的四元数转旋转矩阵
-        quaternion = pin.Quaternion(target_wxyz[0], target_wxyz[1], target_wxyz[2], target_wxyz[3])
+        quaternion = pin.Quaternion(target_wxyz_r[0], target_wxyz_r[1], target_wxyz_r[2], target_wxyz_r[3])
         right_end_effector_task.transform_target_to_world.rotation = quaternion.matrix()
         
-        
+        # h = collision_barrier.compute_barrier(configuration)
+        # self.assertTrue(np.all(h[collision_barrier.non_colliding_objects_pair_id] > 0))
+
+        # 检查碰撞屏障状态 (可选,用于调试)
+        h = collision_barrier.compute_barrier(configuration)
+
+        # 获取所有碰撞对的最小距离值
+        min_val = np.min(h)
+        max_val = np.max(h)
+        mean_val = np.mean(h)
+
+        # 在 viser 场景中添加状态指示器
+        if min_val <= -0.02:
+            server.scene.add_icosphere("/collision_warning", radius=0.05, color=(255, 0, 0))  # 红色 - 危险
+            print(f"\n{'='*60}")
+            print(f"⚠️  严重警告: 检测到自碰撞!")
+            print(f"   最小屏障值: {min_val:.4f}")
+            print(f"   最大屏障值: {max_val:.4f}")
+            print(f"   平均屏障值: {mean_val:.4f}")
+            print(f"{'='*60}\n")
+            print("程序已停止以防止碰撞损坏。")
+            break  # 退出循环，停止程序
+        elif min_val < 0.01:
+            server.scene.add_icosphere("/collision_warning", radius=0.05, color=(255, 255, 0))  # 黄色 - 警告
+            print(f"⚡ 注意: 接近碰撞边界! 最小屏障值: {min_val:.4f}")
+        else:
+            server.scene.add_icosphere("/collision_warning", radius=0.05, color=(0, 255, 0))  # 绿色 - 安全
         # # Update visualization frames
         # viewer["left_end_effector"].set_transform(
         #     configuration.get_transform_frame_to_world(
