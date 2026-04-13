@@ -1,0 +1,47 @@
+# upper_arm_length:
+#   value: 0.2595
+# forearm_length:
+#   value: 0.301
+# hand_length:
+#   value: 0.154
+# total_arm_span:
+#   value: 0.7145
+
+ReadyPos_l:
+  # value: [0.0, 0.5, 1.5707963, -1.5, -1.5707963]
+  value: [0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+
+
+ReadyPos_r:
+  # value: [0.0, -0.5, -1.5707963, 1.5, 1.5707963]
+  value: [0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+
+init_qpos:
+  value: [  0, 0, 0, 0, 0, 0, 0, 
+            0, 0, 0, 0, 0, 0, 0, 
+            3.08, 3.08, 3.08, 3.08, 0.93, 2.86, 
+            3.08, 3.07, 3.08, 3.07, 0.93, 2.87, 
+            0, 0, 0, 0]
+
+urdf_path_l:
+  value: "models/URDF_Z1/l_arm.urdf"
+
+urdf_path_r:
+  value: "models/URDF_Z1/r_arm.urdf"
+
+
+urdf_path_full:
+  value: "models/URDF_Z1/MagicBotZ1.urdf"
+
+ready_pos:
+  value: [  0.0, 0.5, 0, 0.07, -1.5707963, 0.52, 0.0, 
+            0.0, -0.5, 0, -0.07, 1.5707963, -0.52, 0.0, 
+            3.08, 3.08, 3.08, 3.08, 0.93, 2.86, 
+            3.08, 3.07, 3.08, 3.07, 0.93, 2.87, 
+            0.01, 0.0, -0.0, 0.0]
+
+ee_frame_name_l:
+  value: "LINK_HAND_L"
+
+ee_frame_name_r:
+  value: "LINK_HAND_R"

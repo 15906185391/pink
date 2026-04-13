@@ -1,0 +1,5 @@
+struct left_tracker_pos {
+    float x;       // 左手位置 x,y,z
+    float y;
+    float z;
+}

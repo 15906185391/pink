@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--This does not replace URDF, and is not an extension of URDF.
+    This is a format for representing semantic information about the robot structure.
+    A URDF file must exist for this robot as well, where the joints and the links that are referenced are defined
+-->
+<robot name="Magicbot-Gen1">
+    <!--DISABLE COLLISIONS: By default it is assumed that any link of the robot could potentially come into collision with any other link in the robot. This tag disables collision checking between a specified pair of links. -->
+    
+    <!-- 禁用相邻连杆的碰撞检测 -->
+    <!-- 腰部/躯干链 -->
+    <disable_collisions link1="pelvis" link2="link_wr" reason="Adjacent"/>
+    <disable_collisions link1="link_wr" link2="link_wy" reason="Adjacent"/>
+    <disable_collisions link1="link_wy" link2="link_hy" reason="Adjacent"/>
+    <disable_collisions link1="link_hy" link2="link_hp" reason="Adjacent"/>
+    
+    <!-- 左臂链 -->
+    <disable_collisions link1="link_wy" link2="link_la1" reason="Adjacent"/>
+    <disable_collisions link1="link_la1" link2="link_la2" reason="Adjacent"/>
+    <disable_collisions link1="link_la2" link2="link_la3" reason="Adjacent"/>
+    <disable_collisions link1="link_la3" link2="link_la4" reason="Adjacent"/>
+    <disable_collisions link1="link_la4" link2="link_la5" reason="Adjacent"/>
+    <disable_collisions link1="link_la5" link2="link_la6" reason="Adjacent"/>
+    <disable_collisions link1="link_la6" link2="link_la7" reason="Adjacent"/>
+    
+    <!-- 右臂链 -->
+    <disable_collisions link1="link_wy" link2="link_ra1" reason="Adjacent"/>
+    <disable_collisions link1="link_ra1" link2="link_ra2" reason="Adjacent"/>
+    <disable_collisions link1="link_ra2" link2="link_ra3" reason="Adjacent"/>
+    <disable_collisions link1="link_ra3" link2="link_ra4" reason="Adjacent"/>
+    <disable_collisions link1="link_ra4" link2="link_ra5" reason="Adjacent"/>
+    <disable_collisions link1="link_ra5" link2="link_ra6" reason="Adjacent"/>
+    <disable_collisions link1="link_ra6" link2="link_ra7" reason="Adjacent"/>
+
+    <!-- 禁用隔一个连杆的碰撞检测 -->
+    <!-- 左臂链 - 隔一个 -->
+    <disable_collisions link1="link_wy" link2="link_la2" reason="Never"/>
+    <disable_collisions link1="link_la1" link2="link_la3" reason="Never"/>
+    <disable_collisions link1="link_la2" link2="link_la4" reason="Never"/>
+    <disable_collisions link1="link_la3" link2="link_la5" reason="Never"/>
+    <disable_collisions link1="link_la4" link2="link_la6" reason="Never"/>
+    <disable_collisions link1="link_la5" link2="link_la7" reason="Never"/>
+    
+    <!-- 右臂链 - 隔一个 -->
+    <disable_collisions link1="link_wy" link2="link_ra2" reason="Never"/>
+    <disable_collisions link1="link_ra1" link2="link_ra3" reason="Never"/>
+    <disable_collisions link1="link_ra2" link2="link_ra4" reason="Never"/>
+    <disable_collisions link1="link_ra3" link2="link_ra5" reason="Never"/>
+    <disable_collisions link1="link_ra4" link2="link_ra6" reason="Never"/>
+    <disable_collisions link1="link_ra5" link2="link_ra7" reason="Never"/>
+    
+    <!-- 腰部/躯干 - 隔一个 (可选) -->
+    <disable_collisions link1="pelvis" link2="link_wy" reason="Never"/>
+    <disable_collisions link1="link_wr" link2="link_hy" reason="Never"/>
+    <disable_collisions link1="link_wy" link2="link_hp" reason="Never"/>
+
+    <!-- 禁用隔两个连杆的碰撞检测 (Skip-two) -->
+    
+    <!-- 左臂链 - 隔两个 -->
+    <disable_collisions link1="link_wy" link2="link_la3" reason="Never"/>
+    <disable_collisions link1="link_la1" link2="link_la4" reason="Never"/>
+    <disable_collisions link1="link_la2" link2="link_la5" reason="Never"/>
+    <disable_collisions link1="link_la3" link2="link_la6" reason="Never"/>
+    <disable_collisions link1="link_la4" link2="link_la7" reason="Never"/>
+    
+    <!-- 右臂链 - 隔两个 -->
+    <disable_collisions link1="link_wy" link2="link_ra3" reason="Never"/>
+    <disable_collisions link1="link_ra1" link2="link_ra4" reason="Never"/>
+    <disable_collisions link1="link_ra2" link2="link_ra5" reason="Never"/>
+    <disable_collisions link1="link_ra3" link2="link_ra6" reason="Never"/>
+    <disable_collisions link1="link_ra4" link2="link_ra7" reason="Never"/>
+    
+    <!-- 腰部/躯干 - 隔两个 (可选) -->
+    <disable_collisions link1="pelvis" link2="link_hy" reason="Never"/>
+    <disable_collisions link1="link_wr" link2="link_hp" reason="Never"/>
+
+
+
+
+</robot>

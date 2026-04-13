@@ -1,0 +1,346 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- This URDF was automatically created by SolidWorks to URDF Exporter! Originally created by Stephen Brawner (brawner@gmail.com) 
+     Commit Version: 1.6.0-4-g7f85cfe  Build Version: 1.6.7995.38578
+     For more information, please see http://wiki.ros.org/sw_urdf_exporter -->
+<robot
+  name="MagicBotZ1_l_arm">
+  <link
+    name="pelvis">
+    <inertial>
+      <origin
+        xyz="0.0001 0 0.0044"
+        rpy="0 0 0" />
+      <mass
+        value="3.4083" />
+      <inertia
+        ixx="0.0095"
+        ixy="0"
+        ixz="0"
+        iyy="0.0056"
+        iyz="0"
+        izz="0.0094" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://magicbot-z1_description/meshes//pelvis.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.75294 0.75294 0.75294 1" />
+      </material>
+    </visual>
+  </link>
+
+  <!-- ###################################################################-->  
+  <!-- ###########################  l_arm ################################-->  
+  <!-- ###################################################################-->  
+  <link
+    name="link_la1">
+    <inertial>
+      <origin
+        xyz="0.0033 0.0422 -0.0117"
+        rpy="0 0 0" />
+      <mass
+        value="0.8939" />
+      <inertia
+        ixx="0.001"
+        ixy="0"
+        ixz="0"
+        iyy="0.0007"
+        iyz="0.0001"
+        izz="0.0009" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://magicbot-z1_description/meshes//link_la1.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.75294 0.75294 0.75294 1" />
+      </material>
+    </visual>
+    <!-- <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://magicbot-z1_description/meshes//link_la1.STL" />
+      </geometry>
+    </collision> -->
+  </link>
+  <joint
+    name="joint_la1"
+    type="revolute">
+    <origin
+      xyz="0 0.11963 0.3208"
+      rpy="0 0 0" />
+    <parent
+      link="pelvis" />
+    <child
+      link="link_la1" />
+    <axis
+      xyz="0 0.99255 -0.12187" />
+    <limit
+      lower="-2.88"
+      upper="2.88"
+      effort="50"
+      velocity="14" />
+  </joint>
+  <link
+    name="link_la2">
+    <inertial>
+      <origin
+        xyz="-0.0006 0.0016 -0.0673"
+        rpy="0 0 0" />
+      <mass
+        value="0.7787" />
+      <inertia
+        ixx="0.0012"
+        ixy="0"
+        ixz="0"
+        iyy="0.0013"
+        iyz="0"
+        izz="0.0007" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://magicbot-z1_description/meshes//link_la2.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.75294 0.75294 0.75294 1" />
+      </material>
+    </visual>
+    <!-- <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://magicbot-z1_description/meshes//link_la2.STL" />
+      </geometry>
+    </collision> -->
+  </link>
+  <joint
+    name="joint_la2"
+    type="revolute">
+    <origin
+      xyz="0 0.047187 -0.013786"
+      rpy="0 0 0" />
+    <parent
+      link="link_la1" />
+    <child
+      link="link_la2" />
+    <axis
+      xyz="1 0 0" />
+    <limit
+      lower="-0.175"
+      upper="2.2515"
+      effort="50"
+      velocity="14" />
+  </joint>
+  <link
+    name="link_la3">
+    <inertial>
+      <origin
+        xyz="0.0035409 -0.00073964 -0.044592"
+        rpy="0 0 0" />
+      <mass
+        value="0.35928" />
+      <inertia
+        ixx="0.0009"
+        ixy="0"
+        ixz="0.0001"
+        iyy="0.0008"
+        iyz="0"
+        izz="0.0005" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://magicbot-z1_description/meshes//link_la3.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.75294 0.75294 0.75294 1" />
+      </material>
+    </visual>
+    <!-- <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://magicbot-z1_description/meshes//link_la3.STL" />
+      </geometry>
+    </collision> -->
+  </link>
+  <joint
+    name="joint_la3"
+    type="revolute">
+    <origin
+      xyz="0 0 -0.1171"
+      rpy="0 0 0" />
+    <parent
+      link="link_la2" />
+    <child
+      link="link_la3" />
+    <axis
+      xyz="0 0 1" />
+    <limit
+      lower="-2.618"
+      upper="2.618"
+      effort="50"
+      velocity="14" />
+  </joint>
+  <link
+    name="link_la4">
+    <inertial>
+      <origin
+        xyz="0.0447 -0.0015 -0.0086458"
+        rpy="0 0 0" />
+      <mass
+        value="1.48" />
+      <inertia
+        ixx="0.0012"
+        ixy="0.0001"
+        ixz="0.0006"
+        iyy="0.0046"
+        iyz="0"
+        izz="0.0044" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://magicbot-z1_description/meshes//link_la4.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.75294 0.75294 0.75294 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://magicbot-z1_description/meshes//link_la4.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="joint_la4"
+    type="revolute">
+    <origin
+      xyz="0.01924 0 -0.0979"
+      rpy="0 0 0" />
+    <parent
+      link="link_la3" />
+    <child
+      link="link_la4" />
+    <axis
+      xyz="0 1 0" />
+    <limit
+      lower="-0.96"
+      upper="2.0944"
+      effort="50"
+      velocity="14" />
+  </joint>
+  <link
+    name="link_la5">
+    <inertial>
+      <origin
+        xyz="0.025808 0.00016898 0.00074869"
+        rpy="0 0 0" />
+      <mass
+        value="0.2728" />
+      <inertia
+        ixx="0.0002"
+        ixy="0"
+        ixz="0"
+        iyy="0.0003"
+        iyz="0"
+        izz="0.0003" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://magicbot-z1_description/meshes//link_la5.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.75294 0.75294 0.75294 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://magicbot-z1_description/meshes//link_la5.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="joint_la5"
+    type="revolute">
+    <origin
+      xyz="0.138 0 -0.017415"
+      rpy="0 0 0" />
+    <parent
+      link="link_la4" />
+    <child
+      link="link_la5" />
+    <axis
+      xyz="1 0 0" />
+    <limit
+      lower="-2.618"
+      upper="2.618"
+      effort="50"
+      velocity="14" />
+  </joint>
+
+  <link name="LINK_HAND_L">
+    <inertial>
+      <origin xyz="0.000000 0.000000 0.000000" rpy="0 0 0" />
+      <mass value="1e-12" />
+      <inertia ixx="1e-12" ixy="0.000000" ixz="0.000000" iyy="1e-12" iyz="0.000000" izz="1e-12" />
+    </inertial>
+  </link>
+  <joint name="J_HAND_L" type="fixed" dont_collapse="true">
+    <origin xyz="0.138 0.000000 -0." rpy="0 0 0" />
+    <parent link="link_la5" />
+    <child link="LINK_HAND_L" />
+    <axis xyz="0 0 1" />
+  </joint>
+</robot>

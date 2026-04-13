@@ -1,0 +1,87 @@
+device:
+  name: "pico4_ultra"        # 设备名称
+
+modules:
+  - name: "Headset"          # 头显模块
+    interfaces:
+      - type: "SensorPose"   # 头显位姿
+        name: "HeadsetPose"
+
+  - name: "LeftController"   # 左手柄模块
+    interfaces:
+      - type: "SensorPose"   # 左手柄整体位姿
+        name: "LeftControllerPose"
+
+      - type: "BooleanButton"  # X 键（左手柄）
+        name: "ButtonX"
+        params:
+          init_state: false
+
+      - type: "BooleanButton"  # Y 键（左手柄）
+        name: "ButtonY"
+        params:
+          init_state: false
+
+      - type: "BooleanButton"  # 左食指扳机键
+        name: "LeftTriggerIndex"
+        params:
+          init_state: false
+
+      - type: "BooleanButton"  # 左中指扳机键
+        name: "LeftTriggerMiddle"
+        params:
+          init_state: false
+
+      - type: "Joystick"       # 左摇杆
+        name: "LeftJoystick"
+        params:
+          min_value: -1.0
+          max_value: 1.0
+
+  - name: "RightController"  # 右手柄模块
+    interfaces:
+      - type: "SensorPose"   # 右手柄整体位姿
+        name: "RightControllerPose"
+
+      - type: "BooleanButton"  # A 键（右手柄）
+        name: "ButtonA"
+        params:
+          init_state: false
+
+      - type: "BooleanButton"  # B 键（右手柄）
+        name: "ButtonB"
+        params:
+          init_state: false
+
+      - type: "BooleanButton"  # 右食指扳机键
+        name: "RightTriggerIndex"
+        params:
+          init_state: false
+
+      - type: "BooleanButton"  # 右中指扳机键
+        name: "RightTriggerMiddle"
+        params:
+          init_state: false
+
+      - type: "Joystick"       # 右摇杆
+        name: "RightJoystick"
+        params:
+          min_value: -1.0
+          max_value: 1.0
+
+
+
+  - name: "PelvisTracker"  # 骨盆追踪器模块
+    interfaces:
+      - type: "SensorPose"   # 左感应器整体位姿
+        name: "PelvisTrackerPose"
+
+  - name: "LeftTracker"  # 左追踪器模块
+    interfaces:
+      - type: "SensorPose"   # 左追踪器整体位姿
+        name: "LeftTrackerPose"
+
+  - name: "RightTracker"  # 右追踪器模块
+    interfaces:
+      - type: "SensorPose"   # 右追踪器整体位姿
+        name: "RightTrackerPose"

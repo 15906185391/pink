@@ -31,6 +31,7 @@ from pink.barriers import SelfCollisionBarrier
 from pink.tasks import FrameTask, PostureTask
 from pink.utils import process_collision_pairs
 from pink.visualization import start_meshcat_visualizer, start_viser_visualizer
+from mocap_system.robot.magicbot import MagicBotGen1
 
 
 if __name__ == "__main__":
@@ -59,6 +60,20 @@ if __name__ == "__main__":
         package_dirs=[os.path.dirname(os.path.dirname(__file__))],
         root_joint=None,
     )
+    
+    q_ref = np.array(
+        [  0, 0, 1.5707963, -1.5707963, -1.5707963, 0, 0, 
+            0, 0, -1.5707963, 1.5707963, 1.5707963, 0, 0]
+    )
+    
+    magicbot = MagicBotGen1()
+    magicbot.move2first()
+    magicbot.move2readypos()
+    
+    
+    
+    ee_l = magicbot.get_init_ee_pose(is_left=True)
+    ee_r = magicbot.get_init_ee_pose(is_left=False)
 
     srdf_path = (
         os.path.dirname(os.path.realpath(__file__))
@@ -67,10 +82,7 @@ if __name__ == "__main__":
     print(srdf_path)
     # viz = start_meshcat_visualizer(robot)
     # viz = start_viser_visualizer(robot)
-    q_ref = np.array(
-        [  0, 0, 1.5707963, -1.5707963, -1.5707963, 0, 0, 
-            0, 0, -1.5707963, 1.5707963, 1.5707963, 0, 0]
-    )
+    
 
     # Collisions: processing collisions from urdf (include all) and srdf
     # (exclude specified) and updating collision model and creating
@@ -90,13 +102,15 @@ if __name__ == "__main__":
     # Pink tasks
     left_end_effector_task = FrameTask(
         "link_la7",
-        position_cost=1.5,  # [cost] / [m]
-        orientation_cost=0.5,  # [cost] / [rad]
+        position_cost=5.0,  # [cost] / [m]
+        orientation_cost=1.0,  # [cost] / [rad]
+        gain=0.5,
     )
     right_end_effector_task = FrameTask(
         "link_ra7",
-        position_cost=1.5,  # [cost] / [m]
-        orientation_cost=0.5,  # [cost] / [rad]
+        position_cost=5.0,  # [cost] / [m]
+        orientation_cost=1.0,  # [cost] / [rad]
+        gain=0.5,
     )
 
     # Pink barriers
@@ -133,7 +147,7 @@ if __name__ == "__main__":
     if "osqp" in qpsolvers.available_solvers:
         solver = "osqp"
 
-    rate = RateLimiter(frequency=50.0)
+    rate = RateLimiter(frequency=50.0, warn=False)
     dt = rate.period
     t = 0.0  # [s]
     # l_y_des = np.array([0.2, -0.1, 0.2])
@@ -156,15 +170,63 @@ if __name__ == "__main__":
     server.scene.add_grid("/ground", width=2, height=2)
     urdf_vis = ViserUrdf(server, urdf, root_node_name="/pelvis")
 
-    # Target gizmo.
-    ik_target_l = server.scene.add_transform_controls(
-        "/ik_target_l", scale=0.2, position=(0.3, 0.1, 0.56), wxyz=(0, 0, 1, 0)
-    )
+    # # Target gizmo.
+    # ik_target_l = server.scene.add_transform_controls(
+    #     "/ik_target_l", scale=0.2, position=(0.3, 0.1, 0.56), wxyz=(0, 0, 1, 0)
+    # )
     
+    
+    # ik_target_r = server.scene.add_transform_controls(
+    #     "/ik_target_r", scale=0.2, position=(0.3, -0.1, 0.56), wxyz=(0, 0, 1, 0)
+    # )
+    
+    # 将位姿转换为 viser 格式
+    # 假设 ee_l 和 ee_r 是 4x4 变换矩阵或类似对象
+    if hasattr(ee_l, 'translation'):
+        # 如果是 Pinocchio SE3 对象
+        pos_l = ee_l.translation
+        rot_l = pin.Quaternion(ee_l.rotation)
+        wxyz_l = np.array([rot_l.w, rot_l.x, rot_l.y, rot_l.z])
+        
+        pos_r = ee_r.translation
+        rot_r = pin.Quaternion(ee_r.rotation)
+        wxyz_r = np.array([rot_r.w, rot_r.x, rot_r.y, rot_r.z])
+    elif isinstance(ee_l, np.ndarray) and ee_l.shape == (4, 4):
+        # 如果是 4x4 变换矩阵
+        pos_l = ee_l[:3, 3]
+        rot_l = pin.Quaternion(ee_l[:3, :3])
+        wxyz_l = np.array([rot_l.w, rot_l.x, rot_l.y, rot_l.z])
+        
+        pos_r = ee_r[:3, 3]
+        rot_r = pin.Quaternion(ee_r[:3, :3])
+        wxyz_r = np.array([rot_r.w, rot_r.x, rot_r.y, rot_r.z])
+    else:
+        # 默认值（如果无法解析）
+        print("⚠️  警告: 无法解析 ee_l/ee_r 格式，使用默认位置")
+        pos_l = np.array([0.3, 0.1, 0.56])
+        wxyz_l = np.array([0, 0, 1, 0])
+        pos_r = np.array([0.3, -0.1, 0.56])
+        wxyz_r = np.array([0, 0, 1, 0])
+    
+    print(f"✓ 左手初始位姿: position={pos_l}, wxyz={wxyz_l}")
+    print(f"✓ 右手初始位姿: position={pos_r}, wxyz={wxyz_r}")
+
+    # Target gizmo - 使用真实位姿初始化
+    ik_target_l = server.scene.add_transform_controls(
+        "/ik_target_l", 
+        scale=0.2, 
+        position=pos_l,  
+        wxyz=wxyz_l      
+    )
     
     ik_target_r = server.scene.add_transform_controls(
-        "/ik_target_r", scale=0.2, position=(0.3, -0.1, 0.56), wxyz=(0, 0, 1, 0)
+        "/ik_target_r", 
+        scale=0.2, 
+        position=pos_r, 
+        wxyz=wxyz_r    
     )
+    
+    print("✓ 变换控制器初始化完成")
     
     
     
@@ -175,6 +237,8 @@ if __name__ == "__main__":
     
     l_dy_des = np.zeros(3)
     r_dy_des = np.zeros(3)
+    
+    joint_cmd = np.zeros(30)
 
     while True:
         # # Make a sinusoidal trajectory between points A and B
@@ -280,5 +344,7 @@ if __name__ == "__main__":
         # Visualize result at fixed FPS
         # viz.display(configuration.q)
         urdf_vis.update_cfg(configuration.q)
+        joint_cmd[:14] = configuration.q
+        magicbot.lcm_handle.publish_joint_command(joint_cmd)
         rate.sleep()
         t += dt
