@@ -66,14 +66,31 @@ if __name__ == "__main__":
             0, 0, -1.5707963, 1.5707963, 1.5707963, 0, 0]
     )
     
+    pin.forwardKinematics(robot.model, robot.data, q_ref)
+    pin.updateFramePlacements(robot.model, robot.data)
+    
+    # 获取左右手末端连杆的 frame ID
+    left_ee_frame_name = "link_la7"
+    right_ee_frame_name = "link_ra7"
+    
+    left_ee_frame_id = robot.model.getFrameId(left_ee_frame_name)
+    right_ee_frame_id = robot.model.getFrameId(right_ee_frame_name)
+    
+    # 检查 frame 是否存在
+    if left_ee_frame_id == robot.model.nframes:
+        raise ValueError(f"找不到左末端连杆: {left_ee_frame_name}")
+    if right_ee_frame_id == robot.model.nframes:
+        raise ValueError(f"找不到右末端连杆: {right_ee_frame_name}")
+    
+    # 获取末端位姿 (SE3 变换矩阵)
+    ee_l = robot.data.oMf[left_ee_frame_id]  # SE3 对象
+    ee_r = robot.data.oMf[right_ee_frame_id]  # SE3 对象
+    
     magicbot = MagicBotGen1()
+    magicbot.get_current_qpos()
     magicbot.move2first()
     magicbot.move2readypos()
     
-    
-    
-    ee_l = magicbot.get_init_ee_pose(is_left=True)
-    ee_r = magicbot.get_init_ee_pose(is_left=False)
 
     srdf_path = (
         os.path.dirname(os.path.realpath(__file__))
@@ -228,48 +245,111 @@ if __name__ == "__main__":
     
     print("✓ 变换控制器初始化完成")
     
-    
-    
-    target_link_name_l = "link_la7"
-    
-    l_y_des = np.array([0.392, 0.392, 0.6])
-    r_y_des = np.array([0.392, 0.392, 0.6])
-    
-    l_dy_des = np.zeros(3)
-    r_dy_des = np.zeros(3)
-    
     joint_cmd = np.zeros(30)
+    
+    joint_cmd[14:30] = magicbot.get_current_qpos()[14:30]
+    
+            # ==================== 轨迹平滑滤波器 ====================
+    class TrajectorySmoother:
+        """
+        轨迹平滑器 - 使用指数移动平均和低通滤波
+        
+        原理：
+        1. 指数移动平均（EMA）：对新旧值进行加权平均
+        2. 速度限制：限制关节速度的最大变化率
+        3. 加速度限制：限制加速度的变化
+        """
+        def __init__(self, n_joints=14, alpha=0.3, max_velocity=1.0, max_acceleration=5.0):
+            """
+            Args:
+                n_joints: 关节数量
+                alpha: EMA 系数 (0-1)，越小越平滑但响应越慢
+                max_velocity: 最大关节速度 (rad/s)
+                max_acceleration: 最大关节加速度 (rad/s²)
+            """
+            self.n_joints = n_joints
+            self.alpha = alpha
+            self.max_velocity = max_velocity
+            self.max_acceleration = max_acceleration
+            
+            # 初始化状态
+            self.prev_q = None          # 上一时刻位置
+            self.prev_vel = np.zeros(n_joints)  # 上一时刻速度
+            self.prev_acc = np.zeros(n_joints)  # 上一时刻加速度
+            self.filtered_q = None      # 滤波后的位置
+            
+            print(f"[TrajectorySmoother] 初始化完成")
+            print(f"  - 关节数: {n_joints}")
+            print(f"  - EMA 系数: {alpha}")
+            print(f"  - 最大速度: {max_velocity} rad/s")
+            print(f"  - 最大加速度: {max_acceleration} rad/s²")
+        
+        def smooth(self, target_q, dt):
+            """
+            平滑目标关节角度
+            
+            Args:
+                target_q: 目标关节角度数组
+                dt: 时间步长
+                
+            Returns:
+                smoothed_q: 平滑后的关节角度
+            """
+            if self.prev_q is None:
+                # 第一次调用，直接返回目标值
+                self.prev_q = target_q.copy()
+                self.filtered_q = target_q.copy()
+                return target_q.copy()
+            
+            # 步骤 1: 计算期望速度
+            desired_vel = (target_q - self.prev_q) / dt
+            
+            # 步骤 2: 速度限制
+            vel_magnitude = np.linalg.norm(desired_vel)
+            if vel_magnitude > self.max_velocity:
+                desired_vel = desired_vel * (self.max_velocity / vel_magnitude)
+            
+            # 步骤 3: 加速度限制
+            desired_acc = (desired_vel - self.prev_vel) / dt
+            acc_magnitude = np.linalg.norm(desired_acc)
+            if acc_magnitude > self.max_acceleration:
+                desired_acc = desired_acc * (self.max_acceleration / acc_magnitude)
+                desired_vel = self.prev_vel + desired_acc * dt
+            
+            # 步骤 4: 指数移动平均滤波
+            smoothed_q = self.alpha * target_q + (1 - self.alpha) * self.filtered_q
+            
+            # 步骤 5: 基于平滑位置的最终速度限制
+            final_vel = (smoothed_q - self.prev_q) / dt
+            final_vel_mag = np.linalg.norm(final_vel)
+            if final_vel_mag > self.max_velocity:
+                smoothed_q = self.prev_q + final_vel * (self.max_velocity / final_vel_mag) * dt
+            
+            # 更新状态
+            self.prev_acc = desired_acc
+            self.prev_vel = desired_vel
+            self.prev_q = smoothed_q.copy()
+            self.filtered_q = smoothed_q.copy()
+            
+            return smoothed_q
+        
+        def reset(self):
+            """重置滤波器状态"""
+            self.prev_q = None
+            self.prev_vel = np.zeros(self.n_joints)
+            self.prev_acc = np.zeros(self.n_joints)
+            self.filtered_q = None
+            print("[TrajectorySmoother] 已重置")
+    
+    # 创建轨迹平滑器实例
+    smoother = TrajectorySmoother(
+        n_joints=14,
+        alpha=0.4,              # EMA 系数：0.3-0.5 之间比较合适
+        max_velocity=2.0,       # 最大关节速度 2 rad/s
+        max_acceleration=10.0   # 最大关节加速度 10 rad/s²
+    )
 
     while True:
-        # # Make a sinusoidal trajectory between points A and B
-        # mu = (1 + np.cos(t)) / 2
-        # l_y_des[:] = (
-        #     A + (B - A + 0.2 * np.array([0, 0, np.sin(mu * np.pi) ** 2])) * mu
-        # )
-        # r_y_des[:] = (
-        #     B + (A - B + 0.2 * np.array([0, 0, -np.sin(mu * np.pi) ** 2])) * mu
-        # )
-
-        # left_end_effector_task.transform_target_to_world.translation = l_y_des
-        # right_end_effector_task.transform_target_to_world.translation = r_y_des
-
-        # Calculate desired trajectory
-        A = 0.1
-        B = 0.1
-        # z -- 0.4 - 0.8
-        l_y_des[:] = (
-            0.2,
-            0.1 + B * np.sin(t),
-            0.2 + A * np.sin(t),
-        )
-        r_y_des[:] = (
-            0.2,
-            -0.1 - B * np.sin(t),
-            0.2 + A * np.sin(t),
-        )
-        l_dy_des[:] = 0, B * np.cos(t), A * np.cos(t)
-        r_dy_des[:] = 0, -B * np.cos(t), A * np.cos(t)
-        
         target_position_l = np.array(ik_target_l.position)
         target_wxyz_l = np.array(ik_target_l.wxyz)
         left_end_effector_task.transform_target_to_world.translation = target_position_l
@@ -313,24 +393,7 @@ if __name__ == "__main__":
             print(f"⚡ 注意: 接近碰撞边界! 最小屏障值: {min_val:.4f}")
         else:
             server.scene.add_icosphere("/collision_warning", radius=0.05, color=(0, 255, 0))  # 绿色 - 安全
-        # # Update visualization frames
-        # viewer["left_end_effector"].set_transform(
-        #     configuration.get_transform_frame_to_world(
-        #         left_end_effector_task.frame
-        #     ).np
-        # )
-        # viewer["right_end_effector"].set_transform(
-        #     configuration.get_transform_frame_to_world(
-        #         right_end_effector_task.frame
-        #     ).np
-        # )
-        # viewer["left_end_effector_target"].set_transform(
-        #     left_end_effector_task.transform_target_to_world.np
-        # )
-        # viewer["right_end_effector_target"].set_transform(
-        #     right_end_effector_task.transform_target_to_world.np
-        # )
-
+            
         velocity = solve_ik(
             configuration,
             tasks,
@@ -340,9 +403,16 @@ if __name__ == "__main__":
             safety_break=False,
         )
         configuration.integrate_inplace(velocity, dt)
+        
+        # 获取 IK 求解后的关节角度
+        raw_q = configuration.q.copy()
+        
+        # 应用平滑滤波
+        smoothed_q = smoother.smooth(raw_q, dt)
+        
+        # 将平滑后的结果写回 configuration
+        configuration.q[:] = smoothed_q
 
-        # Visualize result at fixed FPS
-        # viz.display(configuration.q)
         urdf_vis.update_cfg(configuration.q)
         joint_cmd[:14] = configuration.q
         magicbot.lcm_handle.publish_joint_command(joint_cmd)
