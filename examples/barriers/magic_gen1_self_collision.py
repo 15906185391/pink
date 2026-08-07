@@ -19,7 +19,7 @@ import numpy as np
 import pinocchio as pin
 import qpsolvers
 from loop_rate_limiters import RateLimiter
-from robot_descriptions.iiwa14_description import PACKAGE_PATH, REPOSITORY_PATH
+# from robot_descriptions.iiwa14_description import PACKAGE_PATH, REPOSITORY_PATH
 
 import meshcat_shapes
 import pink
