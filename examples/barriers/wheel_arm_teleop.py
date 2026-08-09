@@ -114,7 +114,8 @@ class RelativeTeleopTarget:
         target = self.ref_end_effector.copy()
         target.translation = (
             self.ref_end_effector.translation
-            + scale * (controller_pose.translation - self.ref_controller.translation)
+            + scale * (controller_pose.translation -
+                       self.ref_controller.translation)
         )
         if orientation_enabled:
             delta_rotation = controller_pose.rotation @ self.ref_controller.rotation.T
@@ -241,7 +242,8 @@ def create_joint_plots(server: viser.ViserServer, joint_count: int):
         aspect=JOINT_PLOT_ASPECT,
         height=JOINT_WRIST_PLOT_HEIGHT,
     )
-    plots = (left_primary_plot, left_wrist_plot, right_primary_plot, right_wrist_plot)
+    plots = (left_primary_plot, left_wrist_plot,
+             right_primary_plot, right_wrist_plot)
     return joint_time_history, joint_position_history, plots
 
 
@@ -262,6 +264,95 @@ def update_joint_plots(
     right_wrist_plot.data = (plot_time, *joint_position_history[11:14])
 
 
+def select_teleop_solver() -> str:
+    if "daqp" in qpsolvers.available_solvers:
+        return "daqp"
+    return select_solver()
+
+
+def create_hardware_interface():
+    from hardware_interface.lcm_handler import LCMHandler
+
+    handler = LCMHandler()
+    handler.left_arm_moving = False
+    handler.right_arm_moving = False
+    handler.head_moving = False
+    handler.waist_moving = False
+    handler.leg_moving = False
+    handler.left_gripper_moving = False
+    handler.right_gripper_moving = False
+    return handler
+
+
+def read_hardware_arm_positions(handler) -> np.ndarray:
+    with handler.joint_current_pos_lock:
+        return np.asarray(handler.joint_current_pos[:14], dtype=float).copy()
+
+
+def read_hardware_model_positions(handler) -> np.ndarray:
+    with handler.joint_current_pos_lock:
+        package = np.asarray(handler.joint_current_pos, dtype=float).copy()
+    return np.concatenate(
+        [
+            package[:14],
+            package[18:21],
+            package[21:23],
+            package[16:18],
+        ]
+    )
+
+
+def wait_for_hardware_model_state(handler, timeout_s: float) -> np.ndarray:
+    deadline = time.monotonic() + timeout_s
+    state_events = {
+        "MANIP_LEFT_ARM_STATE": getattr(handler, "left_arm_state_updated", None),
+        "MANIP_RIGHT_ARM_STATE": getattr(handler, "right_arm_state_updated", None),
+        "MANIP_HEAD_STATE": getattr(handler, "head_state_updated", None),
+        "MANIP_WAIST_STATE": getattr(handler, "waist_state_updated", None),
+        "MANIP_LEG_STATE": getattr(handler, "leg_state_updated", None),
+    }
+
+    print("Waiting for hardware joint state from LCM...")
+    while time.monotonic() < deadline:
+        ready = [
+            event.is_set()
+            for event in state_events.values()
+            if event is not None
+        ]
+        model_q = read_hardware_model_positions(handler)
+        if all(ready) and np.all(np.isfinite(model_q)):
+            return model_q
+        time.sleep(0.01)
+
+    missing = [
+        name
+        for name, event in state_events.items()
+        if event is not None and not event.is_set()
+    ]
+    raise TimeoutError(
+        "Timed out waiting for hardware state topics: " + ", ".join(missing)
+    )
+
+
+def send_hardware_arm_command(handler, arm_q: np.ndarray, enabled: bool) -> None:
+    handler.left_arm_moving = enabled
+    handler.right_arm_moving = enabled
+    if not enabled:
+        return
+
+    with handler.joint_current_pos_lock:
+        package = np.asarray(handler.joint_current_pos, dtype=float).copy()
+    package[:14] = np.asarray(arm_q, dtype=float)
+    handler.upper_body_data_publisher(package)
+
+
+def stop_hardware_arm_command(handler) -> None:
+    if handler is None:
+        return
+    handler.left_arm_moving = False
+    handler.right_arm_moving = False
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--host", default="0.0.0.0")
@@ -271,6 +362,17 @@ def main() -> None:
     parser.add_argument("--activation-threshold", default=0.9, type=float)
     parser.add_argument("--position-only", action="store_true")
     parser.add_argument("--mock-xr", action="store_true")
+    parser.add_argument(
+        "--hardware",
+        action="store_true",
+        help="Send left/right arm joint commands through hardware_interface LCM.",
+    )
+    parser.add_argument(
+        "--hardware-state-timeout",
+        default=5.0,
+        type=float,
+        help="Seconds to wait for initial hardware left/right arm state.",
+    )
     parser.add_argument("--d-min", default=0.03, type=float)
     parser.add_argument("--initial-ignore-distance", default=None, type=float)
     parser.add_argument(
@@ -313,21 +415,41 @@ def main() -> None:
 
     q_ref = initial_configuration(robot.model)
     locked_q_indices, locked_v_indices = locked_joint_indices(robot.model)
+    arm_q_indices, _ = arm_joint_indices(robot.model)
+    joint_names = arm_joint_names()
+    hardware_interface = None
+    if args.hardware:
+        hardware_interface = create_hardware_interface()
+        hardware_model_q = wait_for_hardware_model_state(
+            hardware_interface,
+            args.hardware_state_timeout,
+        )
+        if hardware_model_q.shape != q_ref.shape:
+            raise ValueError(
+                "Hardware state shape does not match model q shape: "
+                f"{hardware_model_q.shape} != {q_ref.shape}"
+            )
+        q_ref = hardware_model_q
+        print(
+            "Initialized model joints from hardware state (rad): "
+            f"{np.array2string(q_ref, precision=4)}"
+        )
+
     left_frame_id = require_frame(robot.model, LEFT_TCP)
     right_frame_id = require_frame(robot.model, RIGHT_TCP)
     robot.collision_data = configure_self_collision(
         robot, q_ref, args.initial_ignore_distance
     )
-    arm_q_indices, _ = arm_joint_indices(robot.model)
-    joint_names = arm_joint_names()
 
     print(f"URDF: {urdf_path}")
-    print(f"nq={robot.model.nq}, collision pairs={len(robot.collision_model.collisionPairs)}")
+    print(
+        f"nq={robot.model.nq}, collision pairs={len(robot.collision_model.collisionPairs)}")
     if args.unlock_non_arm:
         constraints = []
         print("Controlled joints: full model")
     else:
-        constraints = [LockedJointsTask(locked_q_indices, locked_v_indices, q_ref)]
+        constraints = [LockedJointsTask(
+            locked_q_indices, locked_v_indices, q_ref)]
         print(
             "Controlled joints: left/right arms only "
             f"({robot.model.nv - len(locked_v_indices)} moving, "
@@ -342,8 +464,10 @@ def main() -> None:
         collision_data=robot.collision_data,
     )
 
-    left_task = FrameTask(LEFT_TCP, position_cost=5.0, orientation_cost=1.0, gain=0.5)
-    right_task = FrameTask(RIGHT_TCP, position_cost=5.0, orientation_cost=1.0, gain=0.5)
+    left_task = FrameTask(LEFT_TCP, position_cost=5.0,
+                          orientation_cost=1.0, lm_damping=10, gain=0.5)
+    right_task = FrameTask(RIGHT_TCP, position_cost=5.0,
+                           orientation_cost=1.0, gain=0.5)
     posture_task = PostureTask(cost=1e-4)
     tasks = [left_task, right_task, posture_task]
     for task in tasks:
@@ -358,7 +482,7 @@ def main() -> None:
     barriers = [collision_barrier]
 
     xr_client = MockXrClient() if args.mock_xr else XrClient()
-    solver = select_solver()
+    solver = select_teleop_solver()
     rate = RateLimiter(frequency=SOLVE_FREQUENCY_HZ, warn=False)
     dt = rate.period
 
@@ -369,7 +493,7 @@ def main() -> None:
         webbrowser.open(f"http://localhost:{args.port}")
 
     server.scene.add_grid("/ground", width=2, height=2)
-    enable_teleop_gui = server.gui.add_checkbox("Enable teleop", True)
+    enable_teleop_gui = server.gui.add_checkbox("Enable teleop", not args.hardware)
     scale_gui = server.gui.add_slider(
         "Position scale",
         min=0.1,
@@ -377,10 +501,12 @@ def main() -> None:
         step=0.05,
         initial_value=args.scale,
     )
-    server.gui.add_number("Solve frequency (Hz)", SOLVE_FREQUENCY_HZ, disabled=True)
+    server.gui.add_number("Solve frequency (Hz)",
+                          SOLVE_FREQUENCY_HZ, disabled=True)
     ik_time_gui = server.gui.add_number("IK time (ms)", 0.0, disabled=True)
     status_gui = server.gui.add_markdown(
-        format_teleop_status(True, False, False, False, args.scale, "unknown", 0.0)
+        format_teleop_status(True, False, False, False,
+                             args.scale, "unknown", 0.0)
     )
     reset_button = server.gui.add_button("Reset Baseline")
     reset_state = {"requested": False}
@@ -390,23 +516,28 @@ def main() -> None:
         reset_state["requested"] = True
 
     joint_angles_deg = np.rad2deg(configuration.q[arm_q_indices])
-    joint_values_gui = server.gui.add_markdown(format_joint_table(joint_angles_deg))
+    joint_values_gui = server.gui.add_markdown(
+        format_joint_table(joint_angles_deg))
     joint_time_history, joint_position_history, joint_plots = create_joint_plots(
         server, len(joint_names)
     )
 
     urdf_vis = ViserUrdf(server, urdf, root_node_name="/real_robot")
-    urdf_vis.update_cfg(pinocchio_to_yourdfpy_cfg(robot.model, configuration.q))
+    urdf_vis.update_cfg(pinocchio_to_yourdfpy_cfg(
+        robot.model, configuration.q))
 
-    left_pos, left_wxyz = se3_to_viser_pose(configuration.data.oMf[left_frame_id])
-    right_pos, right_wxyz = se3_to_viser_pose(configuration.data.oMf[right_frame_id])
+    left_pos, left_wxyz = se3_to_viser_pose(
+        configuration.data.oMf[left_frame_id])
+    right_pos, right_wxyz = se3_to_viser_pose(
+        configuration.data.oMf[right_frame_id])
     left_target_handle = server.scene.add_transform_controls(
         "/pico_target_l", scale=0.16, fixed=True, position=left_pos, wxyz=left_wxyz
     )
     right_target_handle = server.scene.add_transform_controls(
         "/pico_target_r", scale=0.16, fixed=True, position=right_pos, wxyz=right_wxyz
     )
-    server.scene.add_icosphere("/collision_status", radius=0.04, color=(0, 255, 0))
+    server.scene.add_icosphere(
+        "/collision_status", radius=0.04, color=(0, 255, 0))
 
     print(f"Open http://localhost:{args.port}")
     print("PICO control: hold left/right grip to move each arm; press Y to reset baseline.")
@@ -423,8 +554,10 @@ def main() -> None:
 
     try:
         while True:
-            current_left = configuration.get_transform_frame_to_world(LEFT_TCP).copy()
-            current_right = configuration.get_transform_frame_to_world(RIGHT_TCP).copy()
+            current_left = configuration.get_transform_frame_to_world(
+                LEFT_TCP).copy()
+            current_right = configuration.get_transform_frame_to_world(
+                RIGHT_TCP).copy()
             teleop_enabled = bool(enable_teleop_gui.value)
             scale = float(scale_gui.value)
             xr_ok = False
@@ -442,7 +575,8 @@ def main() -> None:
                     print("Teleop baseline reset.")
 
                 left_grip = float(xr_client.get_key_value_by_name("left_grip"))
-                right_grip = float(xr_client.get_key_value_by_name("right_grip"))
+                right_grip = float(
+                    xr_client.get_key_value_by_name("right_grip"))
                 left_active = teleop_enabled and left_grip >= args.activation_threshold
                 right_active = teleop_enabled and right_grip >= args.activation_threshold
 
@@ -487,7 +621,8 @@ def main() -> None:
             left_task.transform_target_to_world = left_target_pose
             right_task.transform_target_to_world = right_target_pose
             set_transform_handle_from_se3(left_target_handle, left_target_pose)
-            set_transform_handle_from_se3(right_target_handle, right_target_pose)
+            set_transform_handle_from_se3(
+                right_target_handle, right_target_pose)
 
             h = collision_barrier.compute_barrier(configuration)
             min_barrier = float(np.min(h))
@@ -503,9 +638,11 @@ def main() -> None:
 
             now = time.monotonic()
             if status != last_status:
-                server.scene.add_icosphere("/collision_status", radius=0.04, color=color)
+                server.scene.add_icosphere(
+                    "/collision_status", radius=0.04, color=color)
             if status != last_status or now - last_print_time > 1.0:
-                print(f"collision status={status}, min barrier={min_barrier:.4f}")
+                print(
+                    f"collision status={status}, min barrier={min_barrier:.4f}")
                 last_status = status
                 last_print_time = now
 
@@ -523,14 +660,22 @@ def main() -> None:
             except NoSolutionFound as exc:
                 print(f"IK solver failed: {exc}")
                 velocity = np.zeros(robot.model.nv)
-            ik_time_gui.value = round((time.perf_counter() - ik_start) * 1000.0, 3)
+            ik_time_gui.value = round(
+                (time.perf_counter() - ik_start) * 1000.0, 3)
 
             configuration.integrate_inplace(velocity, dt)
             if not args.unlock_non_arm:
                 q_locked = configuration.q.copy()
                 q_locked[locked_q_indices] = q_ref[locked_q_indices]
                 configuration.update(q_locked)
-            urdf_vis.update_cfg(pinocchio_to_yourdfpy_cfg(robot.model, configuration.q))
+            if hardware_interface is not None:
+                send_hardware_arm_command(
+                    hardware_interface,
+                    configuration.q[arm_q_indices],
+                    enabled=teleop_enabled and status != "collision",
+                )
+            urdf_vis.update_cfg(pinocchio_to_yourdfpy_cfg(
+                robot.model, configuration.q))
 
             joint_angles_deg = np.rad2deg(configuration.q[arm_q_indices])
             joint_time_history[:-1] = joint_time_history[1:]
@@ -561,6 +706,7 @@ def main() -> None:
     except KeyboardInterrupt:
         print("Stopped.")
     finally:
+        stop_hardware_arm_command(hardware_interface)
         xr_client.close()
 
 
